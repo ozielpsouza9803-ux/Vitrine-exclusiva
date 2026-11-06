@@ -64,6 +64,8 @@ export interface IAuthService {
   loginCustomer(email: string, code?: string): Promise<void>;
   loginAdmin(credentials: { email: string; token: string }): Promise<boolean>;
   logout(): Promise<void>;
+  updatePassword(password: string): Promise<{ error: Error | null }>;
+  resetPassword(email: string): Promise<{ error: Error | null }>;
 }
 
 /**

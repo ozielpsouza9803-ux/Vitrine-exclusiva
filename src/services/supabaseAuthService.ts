@@ -78,6 +78,18 @@ export class SupabaseAuthService implements IAuthService {
     return true;
   }
 
+  async updatePassword(password: string): Promise<{ error: Error | null }> {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error ? new Error(error.message) : null };
+  }
+
+  async resetPassword(email: string): Promise<{ error: Error | null }> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/#reset-password` : undefined,
+    });
+    return { error: error ? new Error(error.message) : null };
+  }
+
   async logout(): Promise<void> {
     if (!isSupabaseConfigured) return;
     await supabase.auth.signOut();

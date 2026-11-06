@@ -16,7 +16,7 @@ import { PublicStorefront } from './modules/public/PublicStorefront';
 import { ConciergeChat } from './modules/public/ConciergeChat';
 import { CustomerPortal } from './modules/customer/CustomerPortal';
 import { AdminDashboard } from './modules/admin/AdminDashboard';
-import { LoginModule } from './modules/auth/LoginModule';
+import { LoginModule, ResetPasswordModule } from './modules/auth/LoginModule';
 import { supabaseAuthService } from './services/supabaseAuthService';
 
 export default function App() {
@@ -26,11 +26,19 @@ export default function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [pixNotice, setPixNotice] = useState<string | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(window.location.hash === '#reset-password');
   
   const [user, setUser] = useState<{id: string; email: string; role: 'customer' | 'admin'} | null>(null);
 
   useEffect(() => {
     supabaseAuthService.getCurrentUser().then(setUser);
+    
+    // Listen for hash changes to detect password recovery
+    const handleHashChange = () => {
+        setIsResettingPassword(window.location.hash === '#reset-password');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   // Cart operations
@@ -77,6 +85,13 @@ export default function App() {
   const totalCartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
   const renderModule = () => {
+    if (isResettingPassword) {
+        return <ResetPasswordModule onSaveSuccess={() => {
+            window.location.hash = '';
+            setIsResettingPassword(false);
+            supabaseAuthService.getCurrentUser().then(setUser);
+        }} />;
+    }
     if (currentModule === 'admin') {
       if (!user || user.role !== 'admin') {
         return <LoginModule mode="admin" onLoginSuccess={() => supabaseAuthService.getCurrentUser().then(setUser)} />;
