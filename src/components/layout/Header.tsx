@@ -1,157 +1,153 @@
-import React, { useState } from 'react';
-import { Menu, X, ShoppingBag, ShieldCheck, User } from 'lucide-react';
+import React from 'react';
+import { Menu, ShoppingBag, ShieldCheck, User } from 'lucide-react';
 import { AppModule } from '../../types';
+import { PublicTab } from './SideMenuDrawer';
 
 interface HeaderProps {
   currentModule: AppModule;
   onSelectModule: (module: AppModule) => void;
+  currentTab: PublicTab;
+  onSelectTab: (tab: PublicTab) => void;
   cartCount?: number;
+  onOpenMenu: () => void;
+  onOpenCart: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentModule,
   onSelectModule,
+  currentTab,
+  onSelectTab,
   cartCount = 0,
+  onOpenMenu,
+  onOpenCart,
 }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   return (
     <header className="sticky top-0 z-40 w-full bg-[#0A0A0A]/95 backdrop-blur-md border-b border-[#26241E]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Strictly compliant 3-Zone Top Bar */}
-        <div className="flex items-center justify-between gap-8 h-20">
-          {/* Zone 1: Brand Wordmark (Display serif face, single text element, no subtitle) */}
-          <button
-            onClick={() => onSelectModule('public')}
-            className="text-left font-serif-luxury text-xl sm:text-2xl tracking-[0.22em] text-[#F7F7F6] hover:text-[#ECC876] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            AURA PARFUMS
-          </button>
-
-          {/* Zone 2: 4-5 clean single-line nav links */}
-          <nav className="hidden lg:flex items-center gap-8 text-xs tracking-widest uppercase text-neutral-300 font-medium">
+        <div className="flex items-center justify-between gap-4 h-16 sm:h-20">
+          {/* Zone 1: Menu Lateral Button & Logotipo */}
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+            {/* Menu Lateral Hamburger Trigger */}
             <button
-              onClick={() => onSelectModule('public')}
-              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap shrink-0 py-1 border-b ${
-                currentModule === 'public'
+              onClick={onOpenMenu}
+              className="p-2 text-neutral-300 hover:text-[#ECC876] hover:bg-[#141414] border border-[#26241E] transition-colors flex items-center gap-2 cursor-pointer"
+              title="Abrir Menu Lateral"
+              aria-label="Abrir Menu Lateral"
+            >
+              <Menu className="w-5 h-5 text-[#D4AF37]" />
+              <span className="hidden sm:inline text-[11px] font-semibold tracking-widest uppercase">
+                Menu
+              </span>
+            </button>
+
+            {/* Logotipo AURA PARFUMS */}
+            <button
+              onClick={() => {
+                onSelectModule('public');
+                onSelectTab('home');
+              }}
+              className="text-left font-serif-luxury text-lg sm:text-2xl tracking-[0.22em] text-[#F7F7F6] hover:text-[#ECC876] transition-colors whitespace-nowrap cursor-pointer"
+            >
+              AURA PARFUMS
+            </button>
+          </div>
+
+          {/* Zone 2: Navigation Links for Desktop */}
+          <nav className="hidden md:flex items-center gap-6 text-xs tracking-widest uppercase text-neutral-300 font-medium">
+            <button
+              onClick={() => {
+                onSelectModule('public');
+                onSelectTab('home');
+              }}
+              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap py-1 border-b ${
+                currentModule === 'public' && currentTab === 'home'
                   ? 'text-[#ECC876] border-[#D4AF37]'
                   : 'border-transparent'
               }`}
             >
-              Vitrines de Marca
+              Início
             </button>
+
             <button
-              onClick={() => onSelectModule('public')}
-              className="hover:text-[#ECC876] transition-colors whitespace-nowrap shrink-0 py-1 border-b border-transparent"
+              onClick={() => {
+                onSelectModule('public');
+                onSelectTab('vitrine');
+              }}
+              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap py-1 border-b ${
+                currentModule === 'public' && currentTab === 'vitrine'
+                  ? 'text-[#ECC876] border-[#D4AF37]'
+                  : 'border-transparent'
+              }`}
             >
-              Alta Perfumaria
+              Vitrine
             </button>
+
             <button
-              onClick={() => onSelectModule('customer')}
-              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap shrink-0 py-1 border-b ${
-                currentModule === 'customer'
+              onClick={() => {
+                onSelectModule('customer');
+                onSelectTab('cliente');
+              }}
+              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap py-1 border-b ${
+                currentModule === 'customer' || currentTab === 'cliente'
                   ? 'text-[#ECC876] border-[#D4AF37]'
                   : 'border-transparent'
               }`}
             >
               Área do Cliente
             </button>
+
             <button
-              onClick={() => onSelectModule('admin')}
-              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap shrink-0 py-1 border-b ${
-                currentModule === 'admin'
+              onClick={() => {
+                onSelectModule('public');
+                onSelectTab('chat');
+              }}
+              className={`hover:text-[#ECC876] transition-colors whitespace-nowrap py-1 border-b ${
+                currentTab === 'chat'
                   ? 'text-[#ECC876] border-[#D4AF37]'
                   : 'border-transparent'
               }`}
             >
-              Gestão & Estoque
+              Chat & SAC
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Quick cart badge if shopping */}
+          {/* Zone 3: Actions (Sacola & Admin Link) */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Sacola de Compras Button */}
             <button
-              onClick={() => onSelectModule('public')}
-              className="relative p-2.5 text-neutral-300 hover:text-[#ECC876] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
-              title="Sacola de Compras"
+              onClick={onOpenCart}
+              className="relative p-2.5 text-neutral-300 hover:text-[#ECC876] hover:bg-[#141414] border border-[#26241E] transition-colors flex items-center justify-center cursor-pointer min-h-[40px] min-w-[40px]"
+              title="Abrir Sacola de Compras"
               aria-label="Sacola de compras"
             >
-              <ShoppingBag className="w-5 h-5" />
+              <ShoppingBag className="w-5 h-5 text-[#D4AF37]" />
               {cartCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-[#D4AF37] text-[#0A0A0A] text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#D4AF37] text-[#0A0A0A] text-[10px] font-bold rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               )}
             </button>
 
-            {/* Primary Action Button */}
+            {/* Admin Switcher Action Button */}
             <button
               onClick={() => onSelectModule(currentModule === 'admin' ? 'public' : 'admin')}
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold tracking-wider uppercase bg-[#171717] hover:bg-[#202020] text-[#ECC876] border border-[#D4AF37]/40 transition-colors whitespace-nowrap shrink-0 min-h-[40px] cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold tracking-wider uppercase bg-[#171717] hover:bg-[#202020] text-[#ECC876] border border-[#D4AF37]/40 transition-colors whitespace-nowrap shrink-0 min-h-[40px] cursor-pointer"
             >
               {currentModule === 'admin' ? (
                 <>
                   <User className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Ver Loja</span>
+                  <span className="hidden sm:inline">Ver Loja</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Painel Admin</span>
+                  <span className="hidden sm:inline">Painel Admin</span>
                 </>
               )}
             </button>
-
-            {/* Mobile menu trigger */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2.5 text-neutral-300 hover:text-[#ECC876] min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Abrir Menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
           </div>
         </div>
-
-        {/* Mobile Dropdown Navigation */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden py-4 border-t border-[#26241E] flex flex-col gap-3">
-            <button
-              onClick={() => {
-                onSelectModule('public');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left px-3 py-2 text-xs uppercase tracking-widest ${
-                currentModule === 'public' ? 'text-[#ECC876] bg-[#171717]' : 'text-neutral-300'
-              }`}
-            >
-              Vitrines das Marcas (Loja Pública)
-            </button>
-            <button
-              onClick={() => {
-                onSelectModule('customer');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left px-3 py-2 text-xs uppercase tracking-widest ${
-                currentModule === 'customer' ? 'text-[#ECC876] bg-[#171717]' : 'text-neutral-300'
-              }`}
-            >
-              Área do Cliente (Meus Pedidos)
-            </button>
-            <button
-              onClick={() => {
-                onSelectModule('admin');
-                setMobileMenuOpen(false);
-              }}
-              className={`text-left px-3 py-2 text-xs uppercase tracking-widest ${
-                currentModule === 'admin' ? 'text-[#ECC876] bg-[#171717]' : 'text-neutral-300'
-              }`}
-            >
-              Painel Administrativo & Estoque Físico
-            </button>
-          </div>
-        )}
       </div>
     </header>
   );

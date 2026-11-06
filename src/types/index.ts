@@ -46,12 +46,25 @@ export interface Brand {
 }
 
 /**
+ * Categoria de Perfumaria
+ */
+export interface CategoryRecord {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+/**
  * Produto / Fragrância
  */
 export interface FragranceProduct {
   id: string;
   brandId: string;
   brandName: string;
+  categoryId?: string;
   name: string;
   slug: string;
   concentration: ConcentrationType;

@@ -11,6 +11,7 @@ import {
   FragranceProduct,
   InventoryMovement,
   Order,
+  CustomerProfile,
 } from '../types';
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../config/constants';
 
@@ -34,6 +35,19 @@ export interface BannerRecord {
   displayOrder: number;
 }
 
+export interface StorefrontSettingsRecord {
+  id: string;
+  storeName: string;
+  tagline?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  logoUrl?: string;
+  announcement?: string;
+  freeShippingThreshold?: number;
+  maintenanceMode: boolean;
+  updatedAt?: string;
+}
+
 export class SupabaseDatabaseService implements IDatabaseService {
   private lastErrors: Record<string, string> = {};
 
@@ -48,16 +62,21 @@ export class SupabaseDatabaseService implements IDatabaseService {
   // ==========================================
   // 1. Catálogo de Marcas e Vitrines Oficiais
   // ==========================================
-  async getBrands(): Promise<Brand[]> {
+  async getBrands(options?: { includeInactive?: boolean }): Promise<Brand[]> {
     if (!isSupabaseConfigured) {
       return INITIAL_BRANDS;
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('brands')
       .select('*')
-      .eq('is_active', true)
       .order('featured_order', { ascending: true });
+
+    if (!options?.includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       this.lastErrors['brands'] = error.message;
@@ -84,44 +103,85 @@ export class SupabaseDatabaseService implements IDatabaseService {
   }
 
   async getBrandById(id: string): Promise<Brand | null> {
-    const brands = await this.getBrands();
+    const brands = await this.getBrands({ includeInactive: true });
     return brands.find((b) => b.id === id) || null;
   }
 
-  async saveBrand(brand: Brand): Promise<void> {
-    if (!isSupabaseConfigured) return;
+  async saveBrand(brand: Brand): Promise<Brand> {
+    if (!isSupabaseConfigured) return brand;
 
-    const { error } = await supabase.from('brands').upsert({
-      id: brand.id,
+    const payload: Record<string, any> = {
       name: brand.name,
-      slug: brand.slug,
-      tagline: brand.tagline,
-      country_of_origin: brand.countryOfOrigin,
-      founded_year: brand.foundedYear,
-      description: brand.description,
-      is_active: brand.isActive,
-      featured_order: brand.featuredOrder,
-      logo_symbol: brand.logoSymbol,
-      banner_url: brand.bannerImageUrl,
+      slug: brand.slug || brand.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      tagline: brand.tagline || null,
+      country_of_origin: brand.countryOfOrigin || 'França',
+      founded_year: brand.foundedYear || new Date().getFullYear(),
+      description: brand.description || null,
+      is_active: brand.isActive ?? true,
+      featured_order: brand.featuredOrder ?? 0,
+      logo_symbol: brand.logoSymbol || null,
+      banner_url: brand.bannerImageUrl || null,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    if (brand.id && !brand.id.startsWith('temp-')) {
+      payload.id = brand.id;
+    }
+
+    const { data, error } = await supabase
+      .from('brands')
+      .upsert(payload)
+      .select('*')
+      .single();
 
     if (error) {
       throw new Error(`Falha ao salvar marca: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      tagline: data.tagline || '',
+      countryOfOrigin: data.country_of_origin,
+      foundedYear: data.founded_year,
+      description: data.description || '',
+      isActive: data.is_active,
+      featuredOrder: data.featured_order,
+      logoSymbol: data.logo_symbol || undefined,
+      bannerImageUrl: data.banner_url || undefined,
+    };
+  }
+
+  async toggleBrandActive(id: string, isActive: boolean): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    const { error } = await supabase
+      .from('brands')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Falha ao alterar status da marca: ${error.message}`);
     }
   }
 
   // ==========================================
   // 2. Categorias de Perfumes
   // ==========================================
-  async getCategories(): Promise<CategoryRecord[]> {
+  async getCategories(options?: { includeInactive?: boolean }): Promise<CategoryRecord[]> {
     if (!isSupabaseConfigured) return [];
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('categories')
       .select('*')
-      .eq('is_active', true)
       .order('display_order', { ascending: true });
+
+    if (!options?.includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       this.lastErrors['categories'] = error.message;
@@ -140,6 +200,59 @@ export class SupabaseDatabaseService implements IDatabaseService {
     }));
   }
 
+  async getCategoryById(id: string): Promise<CategoryRecord | null> {
+    const categories = await this.getCategories({ includeInactive: true });
+    return categories.find((c) => c.id === id) || null;
+  }
+
+  async saveCategory(category: CategoryRecord): Promise<CategoryRecord> {
+    if (!isSupabaseConfigured) return category;
+
+    const payload: Record<string, any> = {
+      name: category.name,
+      slug: category.slug || category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      description: category.description || null,
+      is_active: category.isActive ?? true,
+      display_order: category.displayOrder ?? 0,
+    };
+
+    if (category.id && !category.id.startsWith('temp-')) {
+      payload.id = category.id;
+    }
+
+    const { data, error } = await supabase
+      .from('categories')
+      .upsert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(`Falha ao salvar categoria: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description || undefined,
+      isActive: data.is_active,
+      displayOrder: data.display_order,
+    };
+  }
+
+  async toggleCategoryActive(id: string, isActive: boolean): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    const { error } = await supabase
+      .from('categories')
+      .update({ is_active: isActive })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Falha ao alterar status da categoria: ${error.message}`);
+    }
+  }
+
   // ==========================================
   // 3. Catálogo de Produtos e Fragrâncias Reais
   // ==========================================
@@ -147,6 +260,8 @@ export class SupabaseDatabaseService implements IDatabaseService {
     brandId?: string;
     olfactoryFamily?: string;
     search?: string;
+    includeInactive?: boolean;
+    status?: string;
   }): Promise<FragranceProduct[]> {
     if (!isSupabaseConfigured) {
       return this.filterInitialProducts(filters);
@@ -162,9 +277,21 @@ export class SupabaseDatabaseService implements IDatabaseService {
           minimum_threshold,
           shelf_location,
           reserved_online
+        ),
+        product_images (
+          image_url,
+          alt_text,
+          display_order,
+          is_primary
         )
       `)
-      .eq('status', 'active');
+      .order('created_at', { ascending: false });
+
+    if (!filters?.includeInactive) {
+      query = query.eq('status', 'active');
+    } else if (filters?.status && filters.status !== 'all') {
+      query = query.eq('status', filters.status);
+    }
 
     if (filters?.brandId && filters.brandId !== 'all') {
       query = query.eq('brand_id', filters.brandId);
@@ -191,10 +318,15 @@ export class SupabaseDatabaseService implements IDatabaseService {
         ? item.inventory_stock[0]
         : item.inventory_stock;
 
+      const galleryImages = (item.product_images || [])
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+        .map((img: any) => img.image_url);
+
       return {
         id: item.id,
         brandId: item.brand_id,
         brandName: item.brands?.name || 'Casa de Nicho',
+        categoryId: item.category_id || undefined,
         name: item.name,
         slug: item.slug,
         concentration: item.concentration,
@@ -212,7 +344,7 @@ export class SupabaseDatabaseService implements IDatabaseService {
         physicalStock: {
           currentQuantity: stock?.current_quantity ?? 0,
           minimumThreshold: stock?.minimum_threshold ?? 2,
-          shelfLocation: stock?.shelf_location ?? 'Galpão Geral',
+          shelfLocation: stock?.shelf_location ?? 'Depósito Geral',
           reservedOnline: stock?.reserved_online ?? 0,
         },
         status: item.status,
@@ -220,6 +352,7 @@ export class SupabaseDatabaseService implements IDatabaseService {
         isNewArrival: item.is_new_arrival,
         images: {
           primary: item.primary_image_url || '/src/assets/images/hero_luxury_perfume_1793996140999.jpg',
+          gallery: galleryImages.length > 0 ? galleryImages : undefined,
           alt: item.primary_image_alt || item.name,
         },
       };
@@ -244,37 +377,116 @@ export class SupabaseDatabaseService implements IDatabaseService {
   }
 
   async getProductById(id: string): Promise<FragranceProduct | null> {
-    const products = await this.getProducts();
+    const products = await this.getProducts({ includeInactive: true });
     return products.find((p) => p.id === id) || null;
   }
 
-  async saveProduct(product: FragranceProduct): Promise<void> {
-    if (!isSupabaseConfigured) return;
+  async saveProduct(product: FragranceProduct): Promise<FragranceProduct> {
+    if (!isSupabaseConfigured) return product;
 
-    const { error } = await supabase.from('products').upsert({
-      id: product.id,
+    const payload: Record<string, any> = {
       brand_id: product.brandId,
+      category_id: product.categoryId || null,
       name: product.name,
-      slug: product.slug,
+      slug: product.slug || product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       concentration: product.concentration,
       olfactory_family: product.olfactoryFamily,
-      top_notes: product.olfactoryPyramid.topNotes,
-      heart_notes: product.olfactoryPyramid.heartNotes,
-      base_notes: product.olfactoryPyramid.baseNotes,
-      volume_ml: product.volumeMl,
-      price: product.price,
-      sku: product.sku,
-      barcode_ean: product.barcodeEan,
-      status: product.status,
-      is_featured: product.isFeatured,
-      is_new_arrival: product.isNewArrival,
-      primary_image_url: product.images.primary,
-      primary_image_alt: product.images.alt,
+      top_notes: product.olfactoryPyramid.topNotes || [],
+      heart_notes: product.olfactoryPyramid.heartNotes || [],
+      base_notes: product.olfactoryPyramid.baseNotes || [],
+      volume_ml: Number(product.volumeMl) || 50,
+      price: Number(product.price) || 0,
+      promotional_price: product.promotionalPrice ? Number(product.promotionalPrice) : null,
+      sku: product.sku || `AURA-${Date.now().toString(36).toUpperCase()}`,
+      barcode_ean: product.barcodeEan || null,
+      status: product.status || 'active',
+      is_featured: product.isFeatured ?? false,
+      is_new_arrival: product.isNewArrival ?? false,
+      primary_image_url: product.images.primary || '/src/assets/images/hero_luxury_perfume_1793996140999.jpg',
+      primary_image_alt: product.images.alt || product.name,
       updated_at: new Date().toISOString(),
-    });
+    };
+
+    if (product.id && !product.id.startsWith('temp-')) {
+      payload.id = product.id;
+    }
+
+    const { data: savedProduct, error } = await supabase
+      .from('products')
+      .upsert(payload)
+      .select('*')
+      .single();
+
+    if (error || !savedProduct) {
+      throw new Error(`Falha ao salvar produto: ${error?.message || 'Erro desconhecido'}`);
+    }
+
+    const productId = savedProduct.id;
+
+    // Save/Update Inventory Stock
+    const stockPayload = {
+      product_id: productId,
+      current_quantity: Number(product.physicalStock?.currentQuantity) || 0,
+      minimum_threshold: Number(product.physicalStock?.minimumThreshold) || 2,
+      shelf_location: product.physicalStock?.shelfLocation || 'Depósito Geral',
+      reserved_online: Number(product.physicalStock?.reservedOnline) || 0,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: stockError } = await supabase
+      .from('inventory_stock')
+      .upsert(stockPayload, { onConflict: 'product_id' });
+
+    if (stockError) {
+      console.warn('[SupabaseDatabaseService] Aviso ao atualizar estoque físico:', stockError.message);
+    }
+
+    // Save product images gallery if provided
+    if (product.images.gallery && product.images.gallery.length > 0) {
+      await supabase.from('product_images').delete().eq('product_id', productId);
+
+      const imagesPayload = product.images.gallery.map((url, index) => ({
+        product_id: productId,
+        image_url: url,
+        alt_text: `${product.name} - Imagem ${index + 1}`,
+        display_order: index + 1,
+        is_primary: false,
+      }));
+
+      await supabase.from('product_images').insert(imagesPayload);
+    }
+
+    // Record stock movement audit entry
+    try {
+      await supabase.from('inventory_movements').insert({
+        product_id: productId,
+        movement_type: product.id ? 'AJUSTE_BALANCO' : 'ENTRADA',
+        quantity_delta: Number(product.physicalStock?.currentQuantity) || 0,
+        previous_quantity: 0,
+        new_quantity: Number(product.physicalStock?.currentQuantity) || 0,
+        performed_by: 'Painel Admin AURA',
+        reason: product.id ? 'Atualização de produto/estoque via Painel Admin' : 'Cadastro inicial de fragrância',
+      });
+    } catch {
+      // Non-blocking
+    }
+
+    return {
+      ...product,
+      id: productId,
+    };
+  }
+
+  async toggleProductStatus(id: string, status: FragranceProduct['status']): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    const { error } = await supabase
+      .from('products')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id);
 
     if (error) {
-      throw new Error(`Falha ao salvar produto: ${error.message}`);
+      throw new Error(`Falha ao alterar status da fragrância: ${error.message}`);
     }
   }
 
@@ -310,7 +522,112 @@ export class SupabaseDatabaseService implements IDatabaseService {
   }
 
   // ==========================================
-  // 5. Estoque Físico e Auditoria
+  // 5. Configurações Públicas da Loja (storefront_settings)
+  // ==========================================
+  async getStorefrontSettings(): Promise<StorefrontSettingsRecord | null> {
+    if (!isSupabaseConfigured) return null;
+
+    // Fonte oficial pública: storefront_settings
+    const { data: sfData, error: sfError } = await supabase
+      .from('storefront_settings')
+      .select('*')
+      .eq('id', 'public')
+      .maybeSingle();
+
+    if (!sfError && sfData) {
+      delete this.lastErrors['storefront_settings'];
+      return {
+        id: sfData.id,
+        storeName: sfData.store_name || 'AURA Parfums',
+        tagline: sfData.tagline || undefined,
+        contactEmail: sfData.contact_email || undefined,
+        contactPhone: sfData.contact_phone || undefined,
+        logoUrl: sfData.logo_url || undefined,
+        announcement: sfData.announcement || undefined,
+        freeShippingThreshold: sfData.free_shipping_threshold ? Number(sfData.free_shipping_threshold) : undefined,
+        maintenanceMode: Boolean(sfData.maintenance_mode),
+        updatedAt: sfData.updated_at,
+      };
+    }
+
+    if (sfError) {
+      this.lastErrors['storefront_settings'] = sfError.message;
+    }
+
+    // Preservar compatibilidade com a tabela settings caso storefront_settings não esteja povoada
+    const { data: stData, error: stError } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('id', 'store_config')
+      .maybeSingle();
+
+    if (!stError && stData) {
+      delete this.lastErrors['settings'];
+      return {
+        id: stData.id,
+        storeName: stData.store_name || 'AURA Parfums',
+        tagline: stData.tagline || undefined,
+        contactEmail: stData.contact_email || undefined,
+        contactPhone: stData.contact_phone || undefined,
+        freeShippingThreshold: stData.free_shipping_threshold ? Number(stData.free_shipping_threshold) : undefined,
+        maintenanceMode: Boolean(stData.maintenance_mode),
+        updatedAt: stData.updated_at,
+      };
+    }
+
+    return null;
+  }
+
+  // ==========================================
+  // 6. Perfis de Clientes e Assinatura Olfativa
+  // ==========================================
+  async getCustomerProfile(userId: string): Promise<CustomerProfile | null> {
+    if (!isSupabaseConfigured || !userId) return null;
+
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      fullName: data.full_name || '',
+      email: data.email,
+      phone: data.phone || '',
+      cpf: data.cpf || undefined,
+      favoriteFamilies: data.favorite_families || [],
+      favoriteBrands: data.favorite_brand_ids || [],
+      signatureNotes: data.signature_notes || [],
+      savedAddresses: data.saved_addresses || [],
+    };
+  }
+
+  async saveCustomerProfile(profile: CustomerProfile): Promise<void> {
+    if (!isSupabaseConfigured || !profile.id) return;
+
+    const { error } = await supabase.from('customer_profiles').upsert({
+      id: profile.id,
+      full_name: profile.fullName,
+      email: profile.email,
+      phone: profile.phone || null,
+      cpf: profile.cpf || null,
+      favorite_families: profile.favoriteFamilies || [],
+      favorite_brand_ids: profile.favoriteBrands || [],
+      signature_notes: profile.signatureNotes || [],
+      saved_addresses: profile.savedAddresses || [],
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      throw new Error(`Falha ao salvar perfil de cliente: ${error.message}`);
+    }
+  }
+
+  // ==========================================
+  // 7. Estoque Físico e Auditoria
   // ==========================================
   async getInventoryMovements(productId?: string): Promise<InventoryMovement[]> {
     if (!isSupabaseConfigured) return [];

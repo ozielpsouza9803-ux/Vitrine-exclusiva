@@ -7,6 +7,7 @@
 
 import {
   Brand,
+  CategoryRecord,
   FragranceProduct,
   InventoryMovement,
   Order,
@@ -19,14 +20,22 @@ import {
  */
 export interface IDatabaseService {
   // Catálogo de Marcas
-  getBrands(): Promise<Brand[]>;
+  getBrands(options?: { includeInactive?: boolean }): Promise<Brand[]>;
   getBrandById(id: string): Promise<Brand | null>;
-  saveBrand(brand: Brand): Promise<void>;
+  saveBrand(brand: Brand): Promise<Brand>;
+  toggleBrandActive(id: string, isActive: boolean): Promise<void>;
+
+  // Categorias de Perfumes
+  getCategories(options?: { includeInactive?: boolean }): Promise<CategoryRecord[]>;
+  getCategoryById(id: string): Promise<CategoryRecord | null>;
+  saveCategory(category: CategoryRecord): Promise<CategoryRecord>;
+  toggleCategoryActive(id: string, isActive: boolean): Promise<void>;
   
   // Catálogo de Fragrâncias
-  getProducts(filters?: { brandId?: string; olfactoryFamily?: string; search?: string }): Promise<FragranceProduct[]>;
+  getProducts(filters?: { brandId?: string; olfactoryFamily?: string; search?: string; includeInactive?: boolean; status?: string }): Promise<FragranceProduct[]>;
   getProductById(id: string): Promise<FragranceProduct | null>;
-  saveProduct(product: FragranceProduct): Promise<void>;
+  saveProduct(product: FragranceProduct): Promise<FragranceProduct | void>;
+  toggleProductStatus(id: string, status: FragranceProduct['status']): Promise<void>;
   
   // Estoque Físico
   getInventoryMovements(productId?: string): Promise<InventoryMovement[]>;
