@@ -199,6 +199,26 @@ export interface PixPaymentPayload {
 }
 
 /**
+ * Configurações da Central de Pagamentos (Pix Manual, Mercado Pago, InfinitePay)
+ */
+export interface PaymentSettingsRecord {
+  id: string;
+  manualPixEnabled: boolean;
+  pixKeyType: string;
+  pixKey: string;
+  pixHolderName: string;
+  pixBankName: string;
+  pixInstructions: string;
+  mercadopagoEnabled: boolean;
+  mercadopagoStatus: 'active' | 'disabled' | 'awaiting_config' | 'error' | 'validated';
+  mercadopagoClientId?: string;
+  mercadopagoClientSecret?: string;
+  infinitepayEnabled: boolean;
+  infinitepayStatus: 'active' | 'disabled' | 'awaiting_config' | 'error' | 'validated';
+  infinitepayApiKey?: string;
+}
+
+/**
  * Identificador de Módulo da Aplicação
  */
 export type AppModule = 'public' | 'customer' | 'admin';

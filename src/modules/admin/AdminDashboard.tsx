@@ -26,7 +26,7 @@ import {
   Power
 } from 'lucide-react';
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../../config/constants';
-import { FragranceProduct, Brand, CategoryRecord, ConcentrationType, OlfactoryFamily } from '../../types';
+import { FragranceProduct, Brand, CategoryRecord, ConcentrationType, OlfactoryFamily, PaymentSettingsRecord, Order } from '../../types';
 import { getIntegrationStatus } from '../../services/registry';
 import { isSupabaseConfigured } from '../../services/supabaseClient';
 import { supabaseDatabaseService } from '../../services/supabaseDatabaseService';
@@ -36,11 +36,25 @@ import { LuxuryCard } from '../../components/ui/LuxuryCard';
 import { AdminManagement } from './AdminManagement';
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'brands' | 'categories' | 'orders' | 'admins' | 'integrations'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'brands' | 'categories' | 'orders' | 'payments' | 'admins' | 'integrations'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
   const [productsList, setProductsList] = useState<FragranceProduct[]>(isSupabaseConfigured ? [] : INITIAL_PRODUCTS);
   const [brandsList, setBrandsList] = useState<Brand[]>(isSupabaseConfigured ? [] : INITIAL_BRANDS);
   const [categoriesList, setCategoriesList] = useState<CategoryRecord[]>([]);
+  const [adminOrders, setAdminOrders] = useState<Order[]>([]);
+  const [paymentSettingsForm, setPaymentSettingsForm] = useState<PaymentSettingsRecord>({
+    id: 'gateway_config',
+    manualPixEnabled: true,
+    pixKeyType: 'CNPJ',
+    pixKey: '48.293.109/0001-92',
+    pixHolderName: 'AURA PARFUMS HAUTE PARFUMERIE LTDA',
+    pixBankName: 'Itaú Unibanco',
+    pixInstructions: 'Escaneie o QR Code ou copie e cole a chave Pix. O pedido será processado após confirmação administrativa.',
+    mercadopagoEnabled: false,
+    mercadopagoStatus: 'awaiting_config',
+    infinitepayEnabled: false,
+    infinitepayStatus: 'awaiting_config',
+  });
   const [isLoadingRealData, setIsLoadingRealData] = useState(isSupabaseConfigured);
   const [dataError, setDataError] = useState<string | null>(null);
 
@@ -116,15 +130,19 @@ export const AdminDashboard: React.FC = () => {
     setIsLoadingRealData(true);
     setDataError(null);
     try {
-      const [fetchedProducts, fetchedBrands, fetchedCategories] = await Promise.all([
+      const [fetchedProducts, fetchedBrands, fetchedCategories, fetchedPaymentSettings, fetchedOrders] = await Promise.all([
         supabaseDatabaseService.getProducts({ includeInactive: true }),
         supabaseDatabaseService.getBrands({ includeInactive: true }),
         supabaseDatabaseService.getCategories({ includeInactive: true }),
+        supabaseDatabaseService.getPaymentSettings(),
+        supabaseDatabaseService.getOrders(),
       ]);
 
       setProductsList(fetchedProducts || []);
       setBrandsList(fetchedBrands || []);
       setCategoriesList(fetchedCategories || []);
+      if (fetchedPaymentSettings) setPaymentSettingsForm(fetchedPaymentSettings);
+      setAdminOrders(fetchedOrders || []);
 
       const err =
         supabaseDatabaseService.getLastError('products') ||
@@ -138,6 +156,58 @@ export const AdminDashboard: React.FC = () => {
       setDataError(err.message || 'Erro ao carregar dados');
     } finally {
       setIsLoadingRealData(false);
+    }
+  };
+
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setActionFeedback(null);
+    try {
+      await supabaseDatabaseService.savePaymentSettings(paymentSettingsForm);
+      setActionFeedback({
+        type: 'success',
+        message: 'Central de formas de pagamento atualizada com sucesso no Supabase!',
+      });
+      await loadRealInventory();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Erro ao salvar configurações de pagamento.' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmPayment = async (orderId: string) => {
+    setActionFeedback(null);
+    const confirmAction = confirm('Confirma o recebimento do pagamento Pix deste pedido e autoriza a baixa transacional no estoque físico?');
+    if (!confirmAction) return;
+
+    try {
+      await supabaseDatabaseService.confirmOrderPayment(orderId);
+      setActionFeedback({
+        type: 'success',
+        message: 'Pagamento confirmado e estoque baixado com sucesso!',
+      });
+      await loadRealInventory();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Erro ao confirmar pagamento.' });
+    }
+  };
+
+  const handleRejectPayment = async (orderId: string) => {
+    setActionFeedback(null);
+    const confirmAction = confirm('Deseja rejeitar e cancelar este pedido?');
+    if (!confirmAction) return;
+
+    try {
+      await supabaseDatabaseService.rejectOrderPayment(orderId);
+      setActionFeedback({
+        type: 'success',
+        message: 'Pedido rejeitado e cancelado.',
+      });
+      await loadRealInventory();
+    } catch (err: any) {
+      setActionFeedback({ type: 'error', message: err.message || 'Erro ao rejeitar pedido.' });
     }
   };
 
@@ -502,6 +572,18 @@ export const AdminDashboard: React.FC = () => {
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>Pedidos & Pix</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
+              activeTab === 'payments'
+                ? 'bg-[#D4AF37] text-[#0A0A0A] font-semibold'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>Formas de Pagamento</span>
           </button>
 
           <button
@@ -992,62 +1074,278 @@ export const AdminDashboard: React.FC = () => {
         {/* 4. Orders & Pix Verification */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
-            <div>
-              <h2 className="font-serif-luxury text-xl text-white">Controle de Vendas & Liquidação Pix</h2>
-              <p className="text-xs text-neutral-400 mt-1">
-                Conferência de recebimentos em tempo real e autorização de baixa no estoque físico.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-serif-luxury text-xl text-white">Controle de Vendas & Liquidação Pix</h2>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Conferência de recebimentos em tempo real e autorização de baixa no estoque físico.
+                </p>
+              </div>
+              <button
+                onClick={loadRealInventory}
+                className="px-3 py-1.5 bg-[#171717] hover:bg-[#222] border border-[#26241E] text-xs text-[#ECC876] flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Atualizar Pedidos</span>
+              </button>
             </div>
 
-            <LuxuryCard className="p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#26241E]">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-serif-luxury text-base text-[#ECC876] font-semibold">
-                      AURA-2026-0884
-                    </span>
-                    <GoldBadge variant="gold-hairline">Pix Confirmado</GoldBadge>
+            <div className="space-y-4">
+              {adminOrders.map((ord) => (
+                <LuxuryCard key={ord.id} className="p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#26241E]">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-serif-luxury text-base text-[#ECC876] font-semibold">
+                          {ord.orderNumber || ord.id}
+                        </span>
+                        <span
+                          className={`text-[10px] uppercase px-2.5 py-0.5 font-mono ${
+                            ord.status === 'PAGO_CONFIRMADO'
+                              ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800'
+                              : ord.status === 'CANCELADO'
+                              ? 'bg-rose-950/60 text-rose-300 border border-rose-800'
+                              : 'bg-amber-950/60 text-amber-300 border border-amber-800'
+                          }`}
+                        >
+                          {ord.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-neutral-400 mt-1 block">
+                        Cliente: {ord.customerName} · E-mail: {ord.customerEmail || 'Não informado'} · Tel: {ord.customerPhone || 'N/A'}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase text-neutral-400 block">Total do Pedido</span>
+                      <span className="font-serif-luxury text-lg text-[#ECC876] font-semibold tabular-nums">
+                        R$ {Number(ord.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs text-neutral-400 mt-1 block">
-                    Cliente: Oziel Souza · E-mail: ozielpsouza9803@gmail.com
-                  </span>
-                </div>
 
-                <div className="text-right">
-                  <span className="text-[10px] uppercase text-neutral-400 block">Total Liquidado</span>
-                  <span className="font-serif-luxury text-lg text-[#ECC876] font-semibold tabular-nums">
-                    R$ 3.450,00
-                  </span>
-                </div>
-              </div>
+                  <div className="py-4 text-xs space-y-2">
+                    <span className="text-[10px] uppercase text-neutral-500 font-mono block">Itens da Fragrância:</span>
+                    {(ord.items || []).map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-neutral-300">
+                        <span>{item.quantity}x {item.productName}</span>
+                        <span className="font-mono text-[#ECC876]">R$ {(item.unitPrice * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    ))}
+                    <div className="pt-2 text-[11px] text-neutral-400 flex flex-col gap-1">
+                      <span>Endereço de Entrega: {ord.shippingAddress?.street}, {ord.shippingAddress?.number} - {ord.shippingAddress?.city}/{ord.shippingAddress?.state} (CEP: {ord.shippingAddress?.zipCode})</span>
+                    </div>
+                  </div>
 
-              <div className="py-4 text-xs space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-neutral-300">
-                    1x Baccarat Rouge 540 Extrait 70ml (Maison Francis Kurkdjian)
-                  </span>
-                  <span className="text-neutral-400 font-mono">Prateleira: Cofre A - 02</span>
-                </div>
-                <div className="flex justify-between text-neutral-500 text-[11px]">
-                  <span>ID Transação Pix: E23049102934891238491028</span>
-                  <span>Baixa física reservada: 1 unidade</span>
-                </div>
-              </div>
+                  <div className="pt-4 border-t border-[#26241E] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <span className="text-xs text-neutral-400">
+                      Criado em: {new Date(ord.createdAt).toLocaleString('pt-BR')}
+                    </span>
 
-              <div className="pt-4 border-t border-[#26241E] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs text-neutral-400">
-                  Status: <strong>Em separação no estoque climatizado</strong>
-                </span>
+                    <div className="flex items-center gap-2">
+                      {ord.status !== 'PAGO_CONFIRMADO' && ord.status !== 'CANCELADO' && (
+                        <>
+                          <button
+                            onClick={() => handleConfirmPayment(ord.id)}
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-black text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Confirmar Pagamento & Baixar Estoque</span>
+                          </button>
 
-                <GoldButton variant="outline" size="sm" icon={<CheckCircle className="w-3.5 h-3.5" />}>
-                  Autorizar Expedição & Rastreio
-                </GoldButton>
-              </div>
-            </LuxuryCard>
+                          <button
+                            onClick={() => handleRejectPayment(ord.id)}
+                            className="px-3.5 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Rejeitar Pedido</span>
+                          </button>
+                        </>
+                      )}
+
+                      {ord.status === 'PAGO_CONFIRMADO' && (
+                        <span className="text-xs text-emerald-400 flex items-center gap-1 font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Estoque baixado transacionalmente</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </LuxuryCard>
+              ))}
+
+              {adminOrders.length === 0 && (
+                <div className="py-16 text-center text-neutral-400 border border-dashed border-[#26241E] bg-[#121212]">
+                  <p className="font-serif-luxury text-base text-neutral-300">Nenhum pedido registrado no banco de dados.</p>
+                  <p className="text-xs text-neutral-500 mt-1">Os pedidos realizados na vitrine pública aparecerão aqui para verificação.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* 5. Team & Administrator Management */}
+        {/* 5. Payment Methods & Pix Configuration */}
+        {activeTab === 'payments' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-serif-luxury text-xl text-white">Central de Formas de Pagamento & Gateway Pix</h2>
+              <p className="text-xs text-neutral-400 mt-1">
+                Configure a chave Pix manual exibida no checkout e gerencie integrações de pagamento do Supabase.
+              </p>
+            </div>
+
+            <form onSubmit={handleSavePaymentSettings} className="space-y-6">
+              <LuxuryCard className="p-6 sm:p-8 space-y-6">
+                <div className="flex items-center justify-between pb-4 border-b border-[#26241E]">
+                  <div>
+                    <h3 className="font-serif-luxury text-lg text-white">Configuração do Pix Manual (Principal)</h3>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Os dados abaixo são exibidos instantaneamente no modal de pagamento Pix da sacola.
+                    </p>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paymentSettingsForm.manualPixEnabled}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, manualPixEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-[#D4AF37]"
+                    />
+                    <span className="text-xs font-semibold text-[#ECC876] uppercase tracking-wider">Pix Manual Ativo</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  <div>
+                    <label className="block text-xs uppercase text-neutral-400 mb-1">
+                      Tipo de Chave Pix *
+                    </label>
+                    <select
+                      value={paymentSettingsForm.pixKeyType}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, pixKeyType: e.target.value as any })}
+                      className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#26241E] focus:border-[#D4AF37] text-xs text-white outline-none cursor-pointer"
+                    >
+                      <option value="CNPJ">CNPJ</option>
+                      <option value="CPF">CPF</option>
+                      <option value="EMAIL">E-mail</option>
+                      <option value="PHONE">Telefone</option>
+                      <option value="RANDOM">Chave Aleatória (EVP)</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs uppercase text-neutral-400 mb-1">
+                      Chave Pix (Número / Chave) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={paymentSettingsForm.pixKey}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, pixKey: e.target.value })}
+                      placeholder="Ex: 48.293.109/0001-92"
+                      className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#26241E] focus:border-[#D4AF37] text-xs text-white outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs uppercase text-neutral-400 mb-1">
+                      Nome do Titular da Conta *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={paymentSettingsForm.pixHolderName}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, pixHolderName: e.target.value })}
+                      placeholder="Ex: AURA PARFUMS HAUTE PARFUMERIE LTDA"
+                      className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#26241E] focus:border-[#D4AF37] text-xs text-white outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs uppercase text-neutral-400 mb-1">
+                      Instituição Financeira / Banco *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={paymentSettingsForm.pixBankName}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, pixBankName: e.target.value })}
+                      placeholder="Ex: Itaú Unibanco S.A."
+                      className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#26241E] focus:border-[#D4AF37] text-xs text-white outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase text-neutral-400 mb-1">
+                    Instruções de Pagamento Exibidas ao Cliente
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={paymentSettingsForm.pixInstructions}
+                    onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, pixInstructions: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#26241E] focus:border-[#D4AF37] text-xs text-white outline-none font-editorial"
+                  />
+                </div>
+              </LuxuryCard>
+
+              {/* Gateway Gateways: Mercado Pago & InfinitePay */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <LuxuryCard className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-serif-luxury text-base text-white">Mercado Pago (Gateway)</h3>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-neutral-900 text-neutral-400 border border-neutral-800">
+                      {paymentSettingsForm.mercadopagoStatus}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400">
+                    Integração API para checkout transparente com Pix automático e cartões.
+                  </p>
+                  <label className="flex items-center gap-2 pt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paymentSettingsForm.mercadopagoEnabled}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, mercadopagoEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-[#D4AF37]"
+                    />
+                    <span className="text-xs text-neutral-300">Ativar Gateway Mercado Pago</span>
+                  </label>
+                </LuxuryCard>
+
+                <LuxuryCard className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-serif-luxury text-base text-white">InfinitePay (Gateway)</h3>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-neutral-900 text-neutral-400 border border-neutral-800">
+                      {paymentSettingsForm.infinitepayStatus}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-400">
+                    Processamento de pagamentos Pix com liquidação imediata e taxas reduzidas.
+                  </p>
+                  <label className="flex items-center gap-2 pt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={paymentSettingsForm.infinitepayEnabled}
+                      onChange={(e) => setPaymentSettingsForm({ ...paymentSettingsForm, infinitepayEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-[#D4AF37]"
+                    />
+                    <span className="text-xs text-neutral-300">Ativar Gateway InfinitePay</span>
+                  </label>
+                </LuxuryCard>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <GoldButton variant="primary" size="md" disabled={isSaving}>
+                  {isSaving ? 'Salvando Configurações...' : 'Salvar Configurações de Pagamento no Supabase'}
+                </GoldButton>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* 6. Team & Administrator Management */}
         {activeTab === 'admins' && (
           <AdminManagement />
         )}

@@ -13,6 +13,8 @@ import {
 } from './contracts';
 import { supabaseDatabaseService } from './supabaseDatabaseService';
 import { supabaseAuthService } from './supabaseAuthService';
+import { supabaseStorageService } from './supabaseStorageService';
+import { supabasePixService } from './supabasePixService';
 import { isSupabaseConfigured } from './supabaseClient';
 
 interface ServiceRegistry {
@@ -26,8 +28,8 @@ interface ServiceRegistry {
 export const services: ServiceRegistry = {
   database: isSupabaseConfigured ? supabaseDatabaseService : null,
   auth: isSupabaseConfigured ? supabaseAuthService : null,
-  storage: null,
-  pix: null,
+  storage: isSupabaseConfigured ? supabaseStorageService : null,
+  pix: isSupabaseConfigured ? supabasePixService : null,
   chatbot: null,
 };
 

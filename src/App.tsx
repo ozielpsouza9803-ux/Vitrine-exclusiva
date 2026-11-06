@@ -5,7 +5,7 @@
  * Sacola de Compras e o Painel Administrativo.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppModule, FragranceProduct } from './types';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -16,6 +16,8 @@ import { PublicStorefront } from './modules/public/PublicStorefront';
 import { ConciergeChat } from './modules/public/ConciergeChat';
 import { CustomerPortal } from './modules/customer/CustomerPortal';
 import { AdminDashboard } from './modules/admin/AdminDashboard';
+import { LoginModule } from './modules/auth/LoginModule';
+import { supabaseAuthService } from './services/supabaseAuthService';
 
 export default function App() {
   const [currentModule, setCurrentModule] = useState<AppModule>('public');
@@ -24,6 +26,12 @@ export default function App() {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [pixNotice, setPixNotice] = useState<string | null>(null);
+  
+  const [user, setUser] = useState<{id: string; email: string; role: 'customer' | 'admin'} | null>(null);
+
+  useEffect(() => {
+    supabaseAuthService.getCurrentUser().then(setUser);
+  }, []);
 
   // Cart operations
   const handleAddToCart = (product: FragranceProduct) => {
@@ -57,13 +65,6 @@ export default function App() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  const handleCheckoutPix = () => {
-    setPixNotice('Cobrança Pix gerada com sucesso! Seu produto foi reservado no cofre climatizado da AURA Parfums.');
-    setCart([]);
-    setIsCartOpen(false);
-    setTimeout(() => setPixNotice(null), 7000);
-  };
-
   const handleSelectTab = (tab: PublicTab) => {
     setCurrentTab(tab);
     if (tab === 'cliente') {
@@ -75,9 +76,33 @@ export default function App() {
 
   const totalCartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
+  const renderModule = () => {
+    if (currentModule === 'admin') {
+      if (!user || user.role !== 'admin') {
+        return <LoginModule mode="admin" onLoginSuccess={() => supabaseAuthService.getCurrentUser().then(setUser)} />;
+      }
+      return <AdminDashboard />;
+    }
+
+    if (currentModule === 'customer') {
+      if (!user) {
+        return <LoginModule mode="customer" onLoginSuccess={() => supabaseAuthService.getCurrentUser().then(setUser)} />;
+      }
+      return <div className="pb-24"><CustomerPortal /></div>;
+    }
+
+    if (currentTab === 'chat') return <ConciergeChat />;
+    return (
+      <PublicStorefront
+        onAddToCart={handleAddToCart}
+        currentTab={currentTab}
+        onSelectTab={handleSelectTab}
+      />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#F7F7F6] flex flex-col justify-between selection:bg-[#D4AF37] selection:text-black">
-      {/* 1. Cabeçalho Compacto */}
       <Header
         currentModule={currentModule}
         onSelectModule={setCurrentModule}
@@ -88,7 +113,6 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
       />
 
-      {/* Pix Notification Toast */}
       {pixNotice && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-4">
           <div className="p-4 bg-[#14120C] border border-[#D4AF37] shadow-[0_10px_30px_rgba(0,0,0,0.9)] flex items-center justify-between gap-3 text-xs">
@@ -105,7 +129,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. Slide-Over Menu Lateral (Drawer) */}
       <SideMenuDrawer
         isOpen={isSideMenuOpen}
         onClose={() => setIsSideMenuOpen(false)}
@@ -114,45 +137,24 @@ export default function App() {
         onSelectModule={setCurrentModule}
       />
 
-      {/* 3. Sacola de Compras (Cart Drawer) */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cart={cart}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
-        onCheckoutPix={handleCheckoutPix}
+        onCheckoutSuccess={(orderNumber) => {
+          setCart([]);
+          setPixNotice(`Pedido ${orderNumber} criado com sucesso e Pix gerado!`);
+        }}
       />
 
-      {/* 4. Isolated Viewports */}
       <main className="grow w-full">
-        {currentModule === 'public' && currentTab !== 'chat' && (
-          <PublicStorefront
-            onAddToCart={handleAddToCart}
-            currentTab={currentTab}
-            onSelectTab={handleSelectTab}
-          />
-        )}
-
-        {currentModule === 'public' && currentTab === 'chat' && (
-          <ConciergeChat />
-        )}
-
-        {currentModule === 'customer' && (
-          <div className="pb-24">
-            <CustomerPortal />
-          </div>
-        )}
-
-        {currentModule === 'admin' && (
-          <AdminDashboard />
-        )}
+        {renderModule()}
       </main>
 
-      {/* 5. Global Footer */}
       <Footer />
 
-      {/* 6. RODAPÉ FIXO DE NAVEGAÇÃO PÚBLICA (Exatamente 4 Opções: INÍCIO, VITRINE, CLIENTE, CHAT) */}
       {currentModule !== 'admin' && (
         <FixedBottomNav
           currentTab={currentTab}

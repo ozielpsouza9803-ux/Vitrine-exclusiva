@@ -16,12 +16,17 @@ export class SupabaseAuthService implements IAuthService {
       if (!user) return null;
 
       // Checa se o usuário é admin via consulta à tabela protegida admin_users
-      const { data: adminData } = await supabase
+      const { data: adminData, error: adminError } = await supabase
         .from('admin_users')
         .select('role')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .maybeSingle();
+
+      if (adminError) {
+        console.error('Erro ao verificar privilégios administrativos:', adminError);
+        return { id: user.id, email: user.email || '', role: 'customer' };
+      }
 
       return {
         id: user.id,
@@ -57,12 +62,20 @@ export class SupabaseAuthService implements IAuthService {
       password: credentials.token,
     });
 
-    if (error || !data.user) {
-      return false;
+    if (error) {
+      throw new Error(`Erro de autenticação: ${error.message}`);
+    }
+    
+    if (!data.user) {
+      throw new Error('Usuário não encontrado.');
     }
 
     const current = await this.getCurrentUser();
-    return current?.role === 'admin';
+    if (current?.role !== 'admin') {
+      throw new Error('Acesso negado: Usuário sem privilégios administrativos.');
+    }
+
+    return true;
   }
 
   async logout(): Promise<void> {

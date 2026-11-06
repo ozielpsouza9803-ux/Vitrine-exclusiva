@@ -12,6 +12,7 @@ import {
   InventoryMovement,
   Order,
   CustomerProfile,
+  PaymentSettingsRecord,
 } from '../types';
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../config/constants';
 
@@ -791,6 +792,169 @@ export class SupabaseDatabaseService implements IDatabaseService {
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderId);
+  }
+
+  // ==========================================
+  // Central de Formas de Pagamento e Conciliação
+  // ==========================================
+  async getPaymentSettings(): Promise<PaymentSettingsRecord> {
+    const defaultSettings: PaymentSettingsRecord = {
+      id: 'gateway_config',
+      manualPixEnabled: true,
+      pixKeyType: 'CNPJ',
+      pixKey: '48.293.109/0001-92',
+      pixHolderName: 'AURA PARFUMS HAUTE PARFUMERIE LTDA',
+      pixBankName: 'Itaú Unibanco',
+      pixInstructions: 'Escaneie o QR Code ou copie e cole a chave Pix. O pedido será processado após confirmação administrativa do comprovante.',
+      mercadopagoEnabled: false,
+      mercadopagoStatus: 'awaiting_config',
+      infinitepayEnabled: false,
+      infinitepayStatus: 'awaiting_config',
+    };
+
+    if (!isSupabaseConfigured) return defaultSettings;
+
+    const { data, error } = await supabase
+      .from('payment_settings')
+      .select('*')
+      .eq('id', 'gateway_config')
+      .maybeSingle();
+
+    if (error || !data) {
+      return defaultSettings;
+    }
+
+    return {
+      id: data.id,
+      manualPixEnabled: Boolean(data.manual_pix_enabled),
+      pixKeyType: data.pix_key_type || 'CNPJ',
+      pixKey: data.pix_key || defaultSettings.pixKey,
+      pixHolderName: data.pix_holder_name || defaultSettings.pixHolderName,
+      pixBankName: data.pix_bank_name || defaultSettings.pixBankName,
+      pixInstructions: data.pix_instructions || defaultSettings.pixInstructions,
+      mercadopagoEnabled: Boolean(data.mercadopago_enabled),
+      mercadopagoStatus: data.mercadopago_status || 'awaiting_config',
+      mercadopagoClientId: data.mercadopago_client_id || undefined,
+      mercadopagoClientSecret: data.mercadopago_client_secret || undefined,
+      infinitepayEnabled: Boolean(data.infinitepay_enabled),
+      infinitepayStatus: data.infinitepay_status || 'awaiting_config',
+      infinitepayApiKey: data.infinitepay_api_key || undefined,
+    };
+  }
+
+  async savePaymentSettings(settings: PaymentSettingsRecord): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    const { error } = await supabase.from('payment_settings').upsert({
+      id: 'gateway_config',
+      manual_pix_enabled: settings.manualPixEnabled,
+      pix_key_type: settings.pixKeyType,
+      pix_key: settings.pixKey,
+      pix_holder_name: settings.pixHolderName,
+      pix_bank_name: settings.pixBankName,
+      pix_instructions: settings.pixInstructions,
+      mercadopago_enabled: settings.mercadopagoEnabled,
+      mercadopago_status: settings.mercadopagoStatus,
+      mercadopago_client_id: settings.mercadopagoClientId || null,
+      mercadopago_client_secret: settings.mercadopagoClientSecret || null,
+      infinitepay_enabled: settings.infinitepayEnabled,
+      infinitepay_status: settings.infinitepayStatus,
+      infinitepay_api_key: settings.infinitepayApiKey || null,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      throw new Error(`Falha ao salvar configurações de pagamento: ${error.message}`);
+    }
+  }
+
+  async submitPaymentReceipt(orderId: string, receiptUrl: string): Promise<void> {
+    if (!isSupabaseConfigured) return;
+
+    // Atualizar pix_payments com o comprovante enviado pelo cliente
+    await supabase
+      .from('pix_payments')
+      .update({ receipt_url: receiptUrl })
+      .eq('order_id', orderId);
+
+    // Atualizar status do pedido para indicar envio de comprovante
+    await supabase
+      .from('orders')
+      .update({ status: 'AGUARDANDO_PIX', updated_at: new Date().toISOString() })
+      .eq('id', orderId);
+  }
+
+  async confirmOrderPayment(orderId: string): Promise<void> {
+    if (!isSupabaseConfigured || !orderId) return;
+
+    // 1. Atualizar status do pedido para PAGO_CONFIRMADO
+    const { error: orderError } = await supabase
+      .from('orders')
+      .update({ status: 'PAGO_CONFIRMADO', updated_at: new Date().toISOString() })
+      .eq('id', orderId);
+
+    if (orderError) {
+      throw new Error(`Falha ao confirmar pagamento do pedido: ${orderError.message}`);
+    }
+
+    // 2. Atualizar pix_payments para APPROVED se existir
+    await supabase
+      .from('pix_payments')
+      .update({ status: 'APPROVED', paid_at: new Date().toISOString() })
+      .eq('order_id', orderId);
+
+    // 3. Buscar itens do pedido para executar baixa transacional de estoque
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (items && items.length > 0) {
+      for (const item of items) {
+        if (!item.product_id) continue;
+
+        const { data: stockData } = await supabase
+          .from('inventory_stock')
+          .select('current_quantity')
+          .eq('product_id', item.product_id)
+          .maybeSingle();
+
+        if (stockData) {
+          const prevQty = stockData.current_quantity;
+          const newQty = Math.max(0, prevQty - item.quantity);
+
+          await supabase
+            .from('inventory_stock')
+            .update({ current_quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('product_id', item.product_id);
+
+          await supabase.from('inventory_movements').insert({
+            product_id: item.product_id,
+            movement_type: 'SAIDA_VENDA',
+            quantity_delta: -item.quantity,
+            previous_quantity: prevQty,
+            new_quantity: newQty,
+            performed_by: 'Administrador AURA',
+            reason: `Confirmação de pagamento Pix manual (Pedido ID: ${orderId})`,
+            reference_order_id: orderId,
+          });
+        }
+      }
+    }
+  }
+
+  async rejectOrderPayment(orderId: string, reason?: string): Promise<void> {
+    if (!isSupabaseConfigured || !orderId) return;
+
+    await supabase
+      .from('orders')
+      .update({ status: 'CANCELADO', updated_at: new Date().toISOString() })
+      .eq('id', orderId);
+
+    await supabase
+      .from('pix_payments')
+      .update({ status: 'EXPIRED' })
+      .eq('order_id', orderId);
   }
 }
 

@@ -12,7 +12,8 @@ import {
   InventoryMovement,
   Order,
   CustomerProfile,
-  PixPaymentPayload
+  PixPaymentPayload,
+  PaymentSettingsRecord
 } from '../types';
 
 /**
@@ -46,6 +47,13 @@ export interface IDatabaseService {
   getOrderById(id: string): Promise<Order | null>;
   createOrder(order: Order): Promise<string>;
   updateOrderStatus(orderId: string, status: Order['status']): Promise<void>;
+  
+  // Central de Formas de Pagamento e Conciliação
+  getPaymentSettings(): Promise<PaymentSettingsRecord>;
+  savePaymentSettings(settings: PaymentSettingsRecord): Promise<void>;
+  submitPaymentReceipt(orderId: string, receiptUrl: string): Promise<void>;
+  confirmOrderPayment(orderId: string): Promise<void>;
+  rejectOrderPayment(orderId: string, reason?: string): Promise<void>;
 }
 
 /**
