@@ -9,8 +9,11 @@ import {
   IAuthService,
   IStorageService,
   IPixPaymentService,
-  IChatbotService
+  IChatbotService,
 } from './contracts';
+import { supabaseDatabaseService } from './supabaseDatabaseService';
+import { supabaseAuthService } from './supabaseAuthService';
+import { isSupabaseConfigured } from './supabaseClient';
 
 interface ServiceRegistry {
   database: IDatabaseService | null;
@@ -21,8 +24,8 @@ interface ServiceRegistry {
 }
 
 export const services: ServiceRegistry = {
-  database: null,
-  auth: null,
+  database: isSupabaseConfigured ? supabaseDatabaseService : null,
+  auth: isSupabaseConfigured ? supabaseAuthService : null,
   storage: null,
   pix: null,
   chatbot: null,
@@ -39,29 +42,36 @@ export function registerService<K extends keyof ServiceRegistry>(
 }
 
 /**
- * Consulta de prontidão das integrações de Camada 2
+ * Consulta de prontidão das integrações
  */
-export function getIntegrationStatus(): Record<keyof ServiceRegistry, { configured: boolean; providerName: string }> {
+export function getIntegrationStatus(): Record<
+  keyof ServiceRegistry,
+  { configured: boolean; providerName: string }
+> {
   return {
     database: {
       configured: services.database !== null,
-      providerName: services.database ? 'Conectado' : 'Aguardando autorização da Camada 2',
+      providerName: isSupabaseConfigured
+        ? 'Supabase PostgreSQL (AURA-PARFUMS)'
+        : 'Aguardando credenciais do banco',
     },
     auth: {
       configured: services.auth !== null,
-      providerName: services.auth ? 'Conectado' : 'Aguardando autorização da Camada 2',
+      providerName: isSupabaseConfigured
+        ? 'Supabase Auth (Magic Link & RBAC)'
+        : 'Aguardando credenciais de Auth',
     },
     storage: {
       configured: services.storage !== null,
-      providerName: services.storage ? 'Conectado' : 'Aguardando autorização da Camada 2',
+      providerName: services.storage ? 'Conectado' : 'Aguardando configuração de Storage',
     },
     pix: {
       configured: services.pix !== null,
-      providerName: services.pix ? 'Conectado' : 'Aguardando autorização da Camada 2',
+      providerName: services.pix ? 'Conectado' : 'Aguardando configuração Pix',
     },
     chatbot: {
       configured: services.chatbot !== null,
-      providerName: services.chatbot ? 'Conectado' : 'Aguardando autorização da Camada 2',
+      providerName: services.chatbot ? 'Conectado' : 'Aguardando ativação do Gemini API',
     },
   };
 }

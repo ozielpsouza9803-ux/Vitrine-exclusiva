@@ -12,7 +12,8 @@ import {
   HardDrive,
   MessageSquareCode,
   Layers,
-  Search
+  Search,
+  Users
 } from 'lucide-react';
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../../config/constants';
 import { FragranceProduct, Brand } from '../../types';
@@ -20,9 +21,10 @@ import { getIntegrationStatus } from '../../services/registry';
 import { GoldButton } from '../../components/ui/GoldButton';
 import { GoldBadge } from '../../components/ui/GoldBadge';
 import { LuxuryCard } from '../../components/ui/LuxuryCard';
+import { AdminManagement } from './AdminManagement';
 
 export const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'brands' | 'orders' | 'integrations'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'brands' | 'orders' | 'admins' | 'integrations'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
   const [productsList, setProductsList] = useState<FragranceProduct[]>(INITIAL_PRODUCTS);
   const [brandsList, setBrandsList] = useState<Brand[]>(INITIAL_BRANDS);
@@ -113,6 +115,18 @@ export const AdminDashboard: React.FC = () => {
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>Pedidos & Pix</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('admins')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
+              activeTab === 'admins'
+                ? 'bg-[#D4AF37] text-[#0A0A0A] font-semibold'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Gestão de Administradores</span>
           </button>
 
           <button
@@ -388,7 +402,12 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* 4. Architecture & Integration Readiness */}
+        {/* 4. Team & Administrator Management (Edge Function aura-admin-manager) */}
+        {activeTab === 'admins' && (
+          <AdminManagement />
+        )}
+
+        {/* 5. Architecture & Integration Readiness */}
         {activeTab === 'integrations' && (
           <div className="space-y-6">
             <div>
