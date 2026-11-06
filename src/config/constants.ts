@@ -1,0 +1,162 @@
+/**
+ * @file src/config/constants.ts
+ * @description Padrões visuais, marcas de alta perfumaria e amostras fundacionais para a vitrine AURA Parfums.
+ */
+
+import { Brand, FragranceProduct } from '../types';
+
+export const APP_CONFIG = {
+  name: 'AURA Parfums',
+  tagline: 'Haute Parfumerie & Niche Fragrances',
+  currency: 'BRL',
+  pixKeyType: 'CNPJ',
+  pixKeyMasked: '48.***.***/0001-92',
+  physicalStockNotice: 'Estoque físico auditado com baixa automatizada por Pix',
+};
+
+export const INITIAL_BRANDS: Brand[] = [
+  {
+    id: 'brand-tom-ford',
+    name: 'Tom Ford Private Blend',
+    slug: 'tom-ford-private-blend',
+    tagline: 'Ousadia arquitetônica e matérias-primas raras',
+    countryOfOrigin: 'Estados Unidos',
+    foundedYear: 2006,
+    description: 'Coleção pessoal de aromas exclusivos do designer, formulados com os extratos mais nobres da perfumaria mundial.',
+    isActive: true,
+    featuredOrder: 1,
+    logoSymbol: 'TF',
+  },
+  {
+    id: 'brand-creed',
+    name: 'House of Creed',
+    slug: 'house-of-creed',
+    tagline: 'Sete gerações de perfumaria artesanal real',
+    countryOfOrigin: 'França',
+    foundedYear: 1760,
+    description: 'Criadores de fragrâncias icônicas para a realeza europeia desde o século XVIII, utilizando o método tradicional de infusão.',
+    isActive: true,
+    featuredOrder: 2,
+    logoSymbol: 'CR',
+  },
+  {
+    id: 'brand-mfk',
+    name: 'Maison Francis Kurkdjian',
+    slug: 'maison-francis-kurkdjian',
+    tagline: 'Precisão parisiense e luminosidade olfativa',
+    countryOfOrigin: 'França',
+    foundedYear: 2009,
+    description: 'A expressão da alta perfumaria contemporânea, combinando sofisticação arquitetural e fascínio magnético.',
+    isActive: true,
+    featuredOrder: 3,
+    logoSymbol: 'MFK',
+  },
+  {
+    id: 'brand-amouage',
+    name: 'Amouage',
+    slug: 'amouage',
+    tagline: 'O presente dos reis — Perfumaria de nicho do Omã',
+    countryOfOrigin: 'Omã',
+    foundedYear: 1983,
+    description: 'Composições opulentas e resinas preciosas como o mais puro incenso de Dhofar e rosas da montanha de Jebel Akhdar.',
+    isActive: true,
+    featuredOrder: 4,
+    logoSymbol: 'AM',
+  },
+];
+
+export const INITIAL_PRODUCTS: FragranceProduct[] = [
+  {
+    id: 'frag-001',
+    brandId: 'brand-mfk',
+    brandName: 'Maison Francis Kurkdjian',
+    name: 'Baccarat Rouge 540 Extrait',
+    slug: 'baccarat-rouge-540-extrait',
+    concentration: 'Extrait de Parfum',
+    olfactoryFamily: 'Oriental / Âmbar',
+    olfactoryPyramid: {
+      topNotes: ['Amêndoa Amarga de Marrocos', 'Açafrão de Caxemira'],
+      heartNotes: ['Jasmim Grandiflorum do Egito', 'Cedro da Virgínia'],
+      baseNotes: ['Âmbar Cinzento Natural', 'Almíscar Amadeirado'],
+    },
+    volumeMl: 70,
+    price: 3450.00,
+    sku: 'MFK-BR540-EXT-70',
+    barcodeEan: '3700559604123',
+    physicalStock: {
+      currentQuantity: 8,
+      minimumThreshold: 3,
+      shelfLocation: 'Cofre A - Prateleira 02',
+      reservedOnline: 1,
+    },
+    status: 'active',
+    isFeatured: true,
+    isNewArrival: false,
+    images: {
+      primary: '/src/assets/images/hero_luxury_perfume_1793996140999.jpg',
+      alt: 'Frasco de luxo Baccarat Rouge 540 com detalhes dourados lapidados',
+    },
+  },
+  {
+    id: 'frag-002',
+    brandId: 'brand-creed',
+    brandName: 'House of Creed',
+    name: 'Aventus Haute Parfumerie',
+    slug: 'aventus-haute-parfumerie',
+    concentration: 'Eau de Parfum',
+    olfactoryFamily: 'Chipre',
+    olfactoryPyramid: {
+      topNotes: ['Abacaxi Real', 'Groselha Negra da Córsega', 'Bergamota Italiana'],
+      heartNotes: ['Bétula Seca', 'Patchouli Intenso', 'Rosa de Marrocos'],
+      baseNotes: ['Musgo de Carvalho', 'Âmbar Gris', 'Baunilha de Bourbon'],
+    },
+    volumeMl: 100,
+    price: 2890.00,
+    sku: 'CR-AVT-EDP-100',
+    barcodeEan: '3508441001114',
+    physicalStock: {
+      currentQuantity: 14,
+      minimumThreshold: 5,
+      shelfLocation: 'Armário B - Gaveta 01',
+      reservedOnline: 2,
+    },
+    status: 'active',
+    isFeatured: true,
+    isNewArrival: false,
+    images: {
+      primary: '/src/assets/images/fragrance_flacon_gold_1793996141741.jpg',
+      alt: 'Flacon Aventus Creed com acabamento preto e dourado sobre pedra basáltica',
+    },
+  },
+  {
+    id: 'frag-003',
+    brandId: 'brand-tom-ford',
+    brandName: 'Tom Ford Private Blend',
+    name: 'Oud Wood Intense Reserve',
+    slug: 'oud-wood-intense-reserve',
+    concentration: 'Parfum',
+    olfactoryFamily: 'Amadeirado',
+    olfactoryPyramid: {
+      topNotes: ['Cardamomo Selvagem', 'Pimenta de Sichuan'],
+      heartNotes: ['Madeira de Oud Escura', 'Sândalo Cremoso', 'Pau-Rosa'],
+      baseNotes: ['Vetiver Fumado', 'Fava Tonka Dourada', 'Âmbar Cristalino'],
+    },
+    volumeMl: 50,
+    price: 2420.00,
+    sku: 'TF-OUD-INT-50',
+    barcodeEan: '888066060129',
+    physicalStock: {
+      currentQuantity: 5,
+      minimumThreshold: 2,
+      shelfLocation: 'Armário A - Gaveta 04',
+      reservedOnline: 0,
+    },
+    status: 'active',
+    isFeatured: true,
+    isNewArrival: true,
+    images: {
+      primary: '/src/assets/images/fragrance_niche_noir_1793996141909.jpg',
+      alt: 'Tom Ford Oud Wood Reserva com placa de metal dourada escovada',
+    },
+  },
+];

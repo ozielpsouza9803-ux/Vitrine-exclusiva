@@ -1,0 +1,6 @@
+{
+  "name": "AURA Parfums — Perfumaria Multimarcas",
+  "description": "Plataforma profissional de perfumaria multimarcas de luxo com vitrines exclusivas por marca, gestão de estoque físico, vendas online, área do cliente e painel administrativo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
