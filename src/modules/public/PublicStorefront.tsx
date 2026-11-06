@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { Sparkles, Eye, ShoppingBag, Check, Layers, SlidersHorizontal, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, Eye, ShoppingBag, Check, Layers, SlidersHorizontal, MapPin, RotateCw } from 'lucide-react';
 import { Brand, FragranceProduct, OlfactoryFamily } from '../../types';
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../../config/constants';
+import { isSupabaseConfigured } from '../../services/supabaseClient';
+import { supabaseDatabaseService } from '../../services/supabaseDatabaseService';
 import { GoldButton } from '../../components/ui/GoldButton';
 import { GoldBadge } from '../../components/ui/GoldBadge';
 import { LuxuryCard } from '../../components/ui/LuxuryCard';
@@ -17,14 +19,47 @@ export const PublicStorefront: React.FC<PublicStorefrontProps> = ({ onAddToCart 
   const [selectedProductForModal, setSelectedProductForModal] = useState<FragranceProduct | null>(null);
   const [addedSuccessId, setAddedSuccessId] = useState<string | null>(null);
 
-  // Filter products by brand and olfactory family
-  const filteredProducts = INITIAL_PRODUCTS.filter((product) => {
-    const matchBrand = selectedBrandId === 'all' || product.brandId === selectedBrandId;
-    const matchFamily = selectedFamily === 'all' || product.olfactoryFamily === selectedFamily;
-    return matchBrand && matchFamily;
-  });
+  // Quando conectado ao Supabase real, elimina dependência de dados fictícios
+  const [brands, setBrands] = useState<Brand[]>(isSupabaseConfigured ? [] : INITIAL_BRANDS);
+  const [products, setProducts] = useState<FragranceProduct[]>(isSupabaseConfigured ? [] : INITIAL_PRODUCTS);
+  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [dbError, setDbError] = useState<string | null>(null);
 
-  const activeBrand = INITIAL_BRANDS.find((b) => b.id === selectedBrandId);
+  useEffect(() => {
+    loadStoreData();
+  }, [selectedBrandId, selectedFamily]);
+
+  const loadStoreData = async () => {
+    setLoading(true);
+    setDbError(null);
+    try {
+      const [fetchedBrands, fetchedProducts] = await Promise.all([
+        supabaseDatabaseService.getBrands(),
+        supabaseDatabaseService.getProducts({
+          brandId: selectedBrandId !== 'all' ? selectedBrandId : undefined,
+          olfactoryFamily: selectedFamily !== 'all' ? selectedFamily : undefined,
+        }),
+      ]);
+
+      setBrands(fetchedBrands || []);
+      setProducts(fetchedProducts || []);
+
+      const err =
+        supabaseDatabaseService.getLastError('brands') ||
+        supabaseDatabaseService.getLastError('products');
+      if (err) {
+        setDbError(err);
+      }
+    } catch (err: any) {
+      console.warn('Erro ao carregar dados do banco:', err);
+      setDbError(err.message || 'Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredProducts = products;
+  const activeBrand = brands.find((b) => b.id === selectedBrandId);
 
   const handleAddWithFeedback = (product: FragranceProduct) => {
     onAddToCart(product);
@@ -95,7 +130,7 @@ export const PublicStorefront: React.FC<PublicStorefrontProps> = ({ onAddToCart 
               {/* Sub-hero metadata */}
               <div className="mt-10 pt-6 border-t border-[#26241E] flex flex-wrap items-center gap-6 text-xs text-neutral-400">
                 <div className="flex items-center gap-2">
-                  <span className="font-serif-luxury text-base text-[#ECC876] tabular-nums">4</span>
+                  <span className="font-serif-luxury text-base text-[#ECC876] tabular-nums">{brands.length}</span>
                   <span>Casas de Nicho Ativas</span>
                 </div>
                 <span aria-hidden="true" className="text-neutral-700">|</span>
@@ -135,6 +170,38 @@ export const PublicStorefront: React.FC<PublicStorefrontProps> = ({ onAddToCart 
         </div>
       </section>
 
+      {/* Aviso de Sincronização do Banco Real */}
+      {dbError && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+          <div className="p-5 bg-[#14120C] border border-amber-900/40 shadow-lg">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#ECC876]">
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Supabase AURA-PARFUMS (zfuqmqhirgbdxjlwhdqe)</span>
+                </div>
+                <h3 className="font-serif-luxury text-base text-white mt-1">
+                  Falha ao sincronizar dados do catálogo
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1 max-w-3xl leading-relaxed">
+                  {dbError}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => loadStoreData()}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-[#D4AF37] hover:bg-[#ECC876] text-black text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? 'Consultando...' : 'Tentar Novamente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 2. Vitrines Individuais por Marca */}
       <section id="vitrines-marcas" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
@@ -171,12 +238,12 @@ export const PublicStorefront: React.FC<PublicStorefrontProps> = ({ onAddToCart 
               Todas as Casas
             </span>
             <span className="text-[11px] text-neutral-400 block mt-2">
-              {INITIAL_PRODUCTS.length} fragrâncias
+              {products.length} fragrâncias
             </span>
           </button>
 
-          {INITIAL_BRANDS.map((brand) => {
-            const count = INITIAL_PRODUCTS.filter((p) => p.brandId === brand.id).length;
+          {brands.map((brand) => {
+            const count = products.filter((p) => p.brandId === brand.id).length;
             const isSelected = selectedBrandId === brand.id;
 
             return (

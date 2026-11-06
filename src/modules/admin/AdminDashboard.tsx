@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Boxes,
   ShieldCheck,
@@ -18,6 +18,8 @@ import {
 import { INITIAL_BRANDS, INITIAL_PRODUCTS } from '../../config/constants';
 import { FragranceProduct, Brand } from '../../types';
 import { getIntegrationStatus } from '../../services/registry';
+import { isSupabaseConfigured } from '../../services/supabaseClient';
+import { supabaseDatabaseService } from '../../services/supabaseDatabaseService';
 import { GoldButton } from '../../components/ui/GoldButton';
 import { GoldBadge } from '../../components/ui/GoldBadge';
 import { LuxuryCard } from '../../components/ui/LuxuryCard';
@@ -26,8 +28,40 @@ import { AdminManagement } from './AdminManagement';
 export const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'brands' | 'orders' | 'admins' | 'integrations'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
-  const [productsList, setProductsList] = useState<FragranceProduct[]>(INITIAL_PRODUCTS);
-  const [brandsList, setBrandsList] = useState<Brand[]>(INITIAL_BRANDS);
+  const [productsList, setProductsList] = useState<FragranceProduct[]>(isSupabaseConfigured ? [] : INITIAL_PRODUCTS);
+  const [brandsList, setBrandsList] = useState<Brand[]>(isSupabaseConfigured ? [] : INITIAL_BRANDS);
+  const [isLoadingRealData, setIsLoadingRealData] = useState(isSupabaseConfigured);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadRealInventory();
+  }, []);
+
+  const loadRealInventory = async () => {
+    setIsLoadingRealData(true);
+    setDataError(null);
+    try {
+      const [fetchedProducts, fetchedBrands] = await Promise.all([
+        supabaseDatabaseService.getProducts(),
+        supabaseDatabaseService.getBrands(),
+      ]);
+
+      setProductsList(fetchedProducts || []);
+      setBrandsList(fetchedBrands || []);
+
+      const err =
+        supabaseDatabaseService.getLastError('products') ||
+        supabaseDatabaseService.getLastError('brands');
+      if (err) {
+        setDataError(err);
+      }
+    } catch (err: any) {
+      console.warn('Erro ao carregar dados do Supabase:', err);
+      setDataError(err.message || 'Erro ao carregar dados');
+    } finally {
+      setIsLoadingRealData(false);
+    }
+  };
 
   // Quick physical stock calculation
   const totalPhysicalUnits = productsList.reduce(
@@ -142,6 +176,36 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Supabase Status Banner */}
+      {dataError && (
+        <div className="mt-8 p-5 bg-[#14120C] border border-amber-900/40 shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-[#ECC876]">
+                <AlertTriangle className="w-4 h-4 text-[#ECC876]" />
+                <span>Supabase AURA-PARFUMS (zfuqmqhirgbdxjlwhdqe)</span>
+              </div>
+              <h3 className="font-serif-luxury text-base text-white mt-1">
+                Erro ao sincronizar dados operacionais
+              </h3>
+              <p className="text-xs text-neutral-400 mt-1 max-w-3xl leading-relaxed">
+                Mensagem do banco: <span className="font-mono text-neutral-300">{dataError}</span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={() => loadRealInventory()}
+                disabled={isLoadingRealData}
+                className="px-3 py-1.5 bg-[#D4AF37] hover:bg-[#ECC876] text-black text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isLoadingRealData ? 'Consultando...' : 'Tentar Novamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
